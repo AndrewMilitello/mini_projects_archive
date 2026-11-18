@@ -1,0 +1,31 @@
+#levenshtein distance algorithm implementation I buiolt three years ago, sparked my interest for NLP
+import numpy
+import math
+from random import randint
+lis = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+t1 = ""
+for i in range(5):
+    t1 += lis[randint(0, 25)]
+t2 = "pairs"
+def levenshtein(t1, t2):
+    m = len(t1)
+    n = len(t2)
+    height = len(t1)+1
+    width = len(t2)+1
+    di = [[i] for i in range(1, m + 1)]   
+    di.insert(0, list(range(0, n + 1)))  
+    for j in range(1, n + 1):
+        for i in range(1, m + 1):
+            if t1[i - 1] == t2[j - 1]:   
+                substitutionCost = 0
+            else:
+                substitutionCost = 1
+            di[i].insert(j, min(di[i - 1][j] + 1,
+                               di[i][j - 1] + 1,
+                               di[i - 1][j - 1] + substitutionCost))
+    for n in range(len(di)):
+        print(di[n])
+    return di[-1]
+levenshtein(t1, t2)
+for i in range(5):
+    t1 += lis[randint(0, 25)]
