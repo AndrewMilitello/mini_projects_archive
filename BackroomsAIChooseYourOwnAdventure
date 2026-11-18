@@ -1,0 +1,172 @@
+#attempted to make AI choose your own adventure game in 2024 by scraping and parsing web data from the Backrooms wiki - was incomplete
+import requests
+import json
+from openai import OpenAI
+from bs4 import BeautifulSoup
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.feature_extraction.text import CountVectorizer
+import re
+import numpy as np
+
+client = OpenAI(
+  base_url="https://api.groq.com/openai/v1",
+  api_key="[GROQ_API_KEY]",
+)
+exit_data = [
+    #real level examples
+    'Level 2, also nicknamed "Abandoned Utility Halls", is the most common exit you will come across, as it is part of the "Main Twelve"14. The threshold fromLevel 1to Level 2 is a smooth one, meaning simply walking far enough in a direction with pipes and dials gradually appearing will make you enter',
+            'Level 1.5- "Inverted"can be accessed through no-clipping',
+             ' Climbing up into holes into the ceiling can lead toLevel 19- "Attic Floorboards',
+             'Speaking the level name ofbHZsMzUyin any language involving the Latin Alphabet in an intelligible manner will open a threshold to the level15',
+             'Breaches in some walls displaying the exterior can lead toLevel 128- "The Great Outdoors"',
+            'The passage leading toLevel 1.2- "Concrete Garden"is within the Aquila Sector',
+            'ExitingLevel 0is only possible by noclipping, which will always result in entry toLevel 1. As newcomers toLevel 0are often unfamiliar with the mechanics of the Backrooms, it is necessary to keep your bearings and adapt quickly to the environment in order to exit.',
+            'Additionally, documentation fromthe M.E.G.can be found in the Manila Room, assisting newcomers in survival and escape. Instructions on how to noclip can be found in [DATA MISSING]',
+    #high prob examples 
+    "Walking through an open door leads to Level 1",
+    "Following a hallway until the walls change will lead to Level 2",
+    "A standard wooden door in the wall leads to Level 3",
+    "Finding a fire exit sign and entering the door takes you to the Hub",
+    "A flight of stairs going down leads to the Basement",
+    "Walking far enough in one direction will eventually lead to the next level",
+    #medium examples 
+    "Climbing into a hole in the ceiling leads to Level 19",
+    "Entering a vent found behind a crate leads to the maintenance tunnels",
+    "Touching a specific painting on the wall leads to the Gallery",
+    "Using a VHS tape on a television will transport you to a new room",
+    "Breaches in the wall displaying the exterior lead to the outdoors",
+    #low examples
+    "No-clipping through a solid floor will lead to the Void",
+    "A glitchy wall that flickers can be phased through to reach Level 404",
+    "Speaking a secret phrase in an ancient language opens a portal",
+    "Clipping through a crate of scrap metal leads to the Scrapyard",
+    "Finding a rare corrupted corridor at the edge of the map",
+    "Stumbling into a hole that shouldn't exist will make you fall into the ceiling"
+]
+labels = [1, 0.2, 0.8, 0.03, 0.4, 0.5, 1.0, 0.25, 0.9, 0.85, 0.95, 0.8, 0.75, 0.7,
+          0.5, 0.45, 0.4, 0.55, 0.6,        
+    0.1, 0.05, 0.02, 0.15, 0.2, 0.1   
+]
+
+vectorizer = CountVectorizer(binary=True) 
+X = vectorizer.fit_transform(exit_data)
+tree = DecisionTreeRegressor(max_depth=8) 
+tree.fit(X, labels)
+#url = "http://localhost:11434/api/chat"
+def get_exit_info(level):
+    curr_level = level
+    info = requests.get(curr_level)
+    html = BeautifulSoup(info.text, "html.parser")
+    content = html.find("div", {"id": "page-content"})
+    exits_headers = content.find_all(lambda tag: (tag.name in ["h2", "h3", "a"] and "exits" in tag.text.lower()) or 
+                                (tag.name == "a" and "exits" in tag.text.lower()))
+    
+    exits_link = [] # links of found a tags for exits
+    exits_html = [] # parent containers
+    exits_text = []
+    banned_classes = ["newpage", "footnote", "javascript"]
+    scan_phrases = [
+        "will lead to", "will lead you to", "can lead to", "can take", "leads to", "lead to",
+        "will take you to", "will make you noclip into", "will eventually lead",
+        "noclip into", "enter", "lead into", "leads into", "will open a threshold to",
+        "will open a door to", "thresholds to", "will threshold to", "can be entered by", "can be accessed"
+    ]
+    for exits_header in exits_headers:
+        if exits_header.name == "a" and "collapsible-block-link" in exits_header.get("class", []):
+            parent = exits_header.find_parent("div", class_="collapsible-block")
+            siblings = parent.find("div", class_="collapsible-block-content")
+            siblings = siblings.find_all(["p", "ul", "ol", "div"])
+        else: 
+            siblings = exits_header.next_siblings
+        for i in siblings:
+            if i.name in ["h1", "h2", "h3", "h4"]:
+                break
+            if i.name in ["p", "ul", "ol", "div"]:
+                for a in i.find_all("a"):
+                    href = a.get("href", "").lower()
+                    aclass = a.get("class", [])
+                    is_exit = (not any(q in aclass for q in banned_classes) and 
+                                    ("level" in href or "the" in href) and 
+                                    "files" not in href and 
+                                    href not in curr_level and
+                                    href not in exits_link
+                              )
+                    if is_exit:
+                        li_parent = a.find_parent("div", class_="styled-quote") or a.find_parent("li")
+                        if li_parent:
+                            outer_text = li_parent.get_text(strip=True)
+                            exit_html = li_parent.decode_contents()
+                        else:
+                            outer_emt = a.find_parent(["li", "p"]) 
+                            if outer_emt:
+                                outer_text = outer_emt.get_text(strip=True)
+                            else:
+                                outer_emt = a.find_parent("div")
+                            split_exits = outer_emt.decode_contents().split('<br/>')
+                            
+                            exit_html = next((s for s in split_exits if a.get('href') in s), "")
+                            
+                            outer_text = BeautifulSoup(exit_html, "html.parser").get_text(strip=True)
+                        if '|' not in outer_text and '«' not in outer_text and ('Author' not in outer_text) and ('Source' not in outer_text):
+                            exits_link.append(href)
+                            exits_html.append(exit_html)
+                            exits_text.append(outer_text)
+
+    exits_list = [f"link: {l}, info: {t[:300]}" for l, t in zip(exits_link, exits_text)]
+    return exits_list, exits_link, exits_html, exits_text
+curr_level = "https://backrooms-wiki.wikidot.com/level-1"
+while True:
+    exits_list, exits_link, exits_html, exits_text =  get_exit_info(curr_level)
+
+    num_exits = len(exits_list)
+    nextlink = exits_link[0]
+    preds = tree.predict(vectorizer.transform(exits_text))
+    preds /= sum(preds)
+    idcs = np.random.choice(range(len(exits_list)), size=min(3, len(exits_list)), p=preds, replace=False)
+    choices = [exits_text[i] for i in idcs]
+    for x in range(len(choices)):
+        print(f"{[x]}: {choices[x]}")
+    c = input("which one? ")
+
+    
+    if nextlink.startswith("https://backrooms-wiki.wikidot.com"):
+        pass
+    else:
+        nextlink = "https://backrooms-wiki.wikidot.com/" + nextlink
+    curr_level = nextlink
+
+'''
+response = requests.post(url, json=payload, stream=True)  
+print("running")
+lines = response.iter_lines()
+output = []
+for i in lines:
+    data = json.loads(i.decode('utf-8'))
+    if "message" in data and "content" in data["message"]:
+        output.append(data["message"]["content"])
+print(''.join(output))  
+'''
+'''
+SYSTEM: You are an AI game master. Respond **ONLY in the structured JSON format** below for every scene:
+
+
+{
+  "node_id": "<unique_id_for_this_scene>",
+  "description": "<scene description>",
+  "options": [
+    {
+      "text": "<option text>",
+      "next_node": "<next scene id>",
+      "outcome": "<what happens if chosen>",
+      "inventory_changes": {
+        "<item>": <integer change>,
+        ...
+      }
+    },
+    ...
+  ]
+}
+
+
+Do not add extra commentary or explanations. The JSON must always be parseable by Python.'''
+
