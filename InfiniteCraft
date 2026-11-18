@@ -1,0 +1,282 @@
+import nltk
+import json
+import os
+import getpass
+from nltk.data import find
+import tkinter as tk
+import numpy as np
+from openai import OpenAI
+
+from nltk.stem import PorterStemmer
+import random
+client = OpenAI(
+  base_url="https://api.groq.com/openai/v1",
+  api_key="[API KEY HERE]",
+)
+
+
+sys_prompt = (
+    "You are a physical reaction and semantic synthesis engine. "
+    "Output ONLY a single, real English noun representing the logical result of merging two items. "
+    "RULES: "
+    "1. NO CONCOCTANATION: Do not combine parts of words (e.g., 'fire' + 'wave' is NOT 'firewave'). "
+    "2. SEMANTIC LOGIC: Focus on the physical or conceptual result (e.g., 'fire' + 'water' = 'steam'). "
+    "3. SCALE & PROGRESSION: If items are of the same type, output an equal or larger or more complex version. Never return a smaller form "
+    "(e.g., 'tree' + 'tree' = 'forest', 'star' + 'star' = 'galaxy')."
+    
+    "(e.g., 'water'+'water'='puddle', 'soil' + 'soil' = 'earth', 'ocean'+'ocean'='abyss'). "
+    "3.5. NEVER return to a smaller form."
+    "4. PRIORITIZE VALID ENGLISH DICTIONARY WORDS: No descriptions, no punctuation, no conversation. Also try to prioritize common easily recongnizable words."
+     "5. REAL WORLD KNOWLEDGE: real-world locations, events, and entities can be included, but still "
+    "(e.g., 'deep' + 'trench' = 'Mariana Trench', 'mountain' + 'nepal' = 'Everest'). "
+    "6. PROPER NOUNS ALLOWED: You may use multiple words ONLY if they form a single proper noun. "
+    "7. IMPORTANT TERMS OVERRIDE: if the merge directly corresponds to a widely recognized scientific, technological, or cultural concept you MUST output the canonical name of that concept even if it is an abbreviation (e.g. 'computer' + 'brain' = 'AI')."
+)
+
+
+stemmer = PorterStemmer()
+#nltk.download('word2vec_sample')
+local_nltk_path = os.path.join(os.getcwd(), 'nltk_data')
+if local_nltk_path not in nltk.data.path:
+    nltk.data.path.append(local_nltk_path)
+try:
+    nltk.data.find('tokenizers/punkt_tab', paths=[local_nltk_path])
+except LookupError:
+    nltk.download('punkt_tab', download_dir=local_nltk_path)
+'''
+path = find('models/word2vec_sample/pruned.word2vec.txt')
+embeddings = {}
+with open(path, 'r', encoding='utf-8') as file:
+    next(file)
+    for f in file:
+        part = f.split()
+        vecs = np.array(part[1:], dtype='float32')
+        normalized = np.linalg.norm(vecs)
+        if normalized > 0:
+            embeddings[part[0]] = vecs / normalized
+np.save("embeddings.npy", embeddings)'''
+embeddings = np.load("embeddings.npy", allow_pickle=True).item()
+
+
+inv_file = "inventory.json"
+current_user = getpass.getuser()  
+def load_inventory():
+    if os.path.exists(inv_file):
+        with open(inv_file, 'r') as f:
+            data = json.load(f)
+            return data.get(current_user, ["water", "air", "fire", "soil"])
+    else:
+        return ["water", "air", "fire", "soil"]
+def save_inventory(inv_list):
+    all_data = {}
+    if os.path.exists(inv_file):
+        with open(inv_file, 'r') as f:
+            data = json.load(f)
+    data[current_user] = inv_list 
+    with open(inv_file, 'w') as f:
+        json.dump(data, f, indent=4)
+inventory = load_inventory()
+rendered_inv = []
+wordlist = list(embeddings.keys())
+vectorlist = np.array(list(embeddings.values()))
+with open('recipes.json', 'r') as file:
+    recipes = json.load(file)
+def merge(choice1, choice2):
+    choice1 = choice1.lower().strip()
+    choice2 = choice2.lower().strip()
+    recipe = "-".join(sorted([choice1, choice2]))
+    if recipe in recipes:
+        if recipes[recipe] not in inventory:
+            inventory.append(recipes[recipe])
+        with open('recipes.json', 'w', encoding='utf-8') as file:
+                    json.dump(recipes, file, indent=4, sort_keys=True, ensure_ascii=False)
+        return recipes[recipe]
+        
+
+    else:
+        if choice1 in inventory and choice2 in inventory:
+            merge = client.chat.completions.create(
+                model="llama-3.1-8b-instant", 
+                messages=[
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": f"{choice1} + {choice2}"}
+                ],
+                temperature=0,
+                max_tokens=5,
+            )
+        
+            output = merge.choices[0].message.content.strip().lower()
+            if output not in embeddings and '+' not in output and ',' not in output:
+                if output not in inventory:
+                    inventory.append(output)
+                recipes[recipe] = output
+                with open('recipes.json', 'w', encoding='utf-8') as file:
+                    json.dump(recipes, file, indent=4)
+                return(output)
+            else:
+                if output not in embeddings:
+                    x = random.randint(0, 1)
+                    
+                    recipes[recipe] = [choice1, choice2][x]
+                    return([choice1, choice2][x])
+                tokenized = [nltk.tokenize.word_tokenize(choice) for choice in [choice1, choice2]]
+                vectors = [embeddings[word[0].lower()] for word in tokenized if word[0].lower() in embeddings]
+                new_vec = np.sum(vectors, axis=0) + (embeddings[output] * 0.75) 
+                new_vec /= np.linalg.norm(new_vec) 
+                indices = np.argsort(np.dot(vectorlist, new_vec))[-20:]
+                found = None
+                for i in reversed(indices):
+                    choice = wordlist[i]
+                    if stemmer.stem(choice.lower()) not in [choice1, choice2]:
+                        found = choice.lower()
+                        break
+                
+                avgvec = (embeddings[found] + embeddings[output]) / 2
+                avgvec /= np.linalg.norm(avgvec)
+                avg_indices = np.argsort(np.dot(vectorlist, avgvec))[-20:] 
+                final = None
+                for x in reversed(avg_indices):
+                    if np.random.random() < 0.75 and choice1 == choice2 and choice in inventory:
+                        continue 
+                    choice = wordlist[x].lower()
+                    if stemmer.stem(choice) not in [stemmer.stem(choice1), stemmer.stem(choice2)]:
+                        final = choice
+                        break
+                finalvec = embeddings.get(final)
+                similarity = np.dot(finalvec, avgvec)
+                if similarity < 0.25:
+                    final = found
+                
+                recipes[recipe] = final
+                inventory.append(final)
+                with open('recipes.json', 'w', encoding='utf-8') as file:
+                    json.dump(recipes, file, indent=4, sort_keys=True, ensure_ascii=False)
+                return(final)
+                
+        else:
+            print('Error: item not in inventory.')    
+    
+
+class InfiniteCraft:
+    def __init__(self, root):
+        self.root = root
+        self.canvas = tk.Canvas(root, width=800, height=600, bg="white")
+        self.canvas.pack(side="right", expand=True)
+        self.sidebar = tk.Frame(self.canvas, width=200, bg="white")
+        scrollbar = tk.Scrollbar(self.sidebar, orient="vertical")
+        scrollbar.pack(side="right", fill="y")
+        self.sidebar_canvas = tk.Canvas(self.sidebar, width=200, yscrollcommand=scrollbar.set)
+        self.sidebar_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.sidebar_canvas.yview)
+        self.inner = tk.Frame(self.sidebar_canvas)
+        self.canvas.create_window(0, 0, window=self.sidebar, anchor="nw", height=600)
+        self.root.bind_all("<MouseWheel>", self.on_mousewheel)
+        self.sidebar_canvas.bind_all("<MouseWheel>", self.on_mousewheel)
+        self.inner.bind("<MouseWheel>", self.on_mousewheel)
+        self.sidebar_canvas.bind_all("<Button-4>", lambda e: self.sidebar_canvas.yview_scroll(-1, "units"))
+        self.sidebar_canvas.bind_all("<Button-5>", lambda e: self.sidebar_canvas.yview_scroll(1, "units"))
+
+        self.sidebar_canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        self.dragged_item = None
+        self.last_x = 0
+        self.last_y = 0
+        self.sidebar_word = None
+        for word in inventory:
+            lbl = tk.Label(self.inner, text=word, bg="white", relief="raised", padx=5, pady=2)
+            lbl.pack(fill="x", padx=5, pady=2)
+            lbl.bind("<ButtonPress-1>", lambda e, w=word: setattr(self, 'sidebar_word', w))
+            lbl.bind("<B1-Motion>", lambda e, w=word, l=lbl: self.sidebar_drag(e, w, l))
+            lbl.bind("<ButtonRelease-1>", lambda e, w=word: self.end_sidebar_drag(e, w))
+            rendered_inv.append(word)
+    
+        self.inner.update_idletasks() 
+        self.sidebar_canvas.config(scrollregion=self.sidebar_canvas.bbox("all"))
+    def create_item(self, text, x, y):
+        tag = f"item_{random.randint(0, 999999)}"
+        txt = self.canvas.create_text(x, y, text=text, font=("Arial", 14, "bold"), tags=(tag, "draggable"))
+        bbox = self.canvas.bbox(txt)
+        pad_x, pad_y = 12, 8
+        bg = self.round_rectangle(self.canvas, bbox[0]-pad_x, bbox[1]-pad_y, 
+                         bbox[2]+pad_x, bbox[3]+pad_y, radius=12, 
+                         fill="white", outline="#bdc3c7", width=2, tags=(tag, "draggable"))
+    
+        self.canvas.tag_raise(txt, bg)
+        self.canvas.tag_bind(tag, "<ButtonPress-1>", self.on_start)
+        self.canvas.tag_bind(tag, "<B1-Motion>", self.on_drag)
+        self.canvas.tag_bind(tag, "<ButtonRelease-1>", self.on_drop)
+        return tag 
+    def on_start(self, event):
+        item = self.canvas.find_closest(event.x, event.y)[0]
+        tags = self.canvas.gettags(item)
+        self.dragged_item = next(t for t in tags if t.startswith("item_"))
+        self.last_x, self.last_y = event.x, event.y
+    def round_rectangle(self, canvas, x1, y1, x2, y2, radius=15, **kwargs):
+        p = [x1+radius, y1, x1+radius, y1, x2-radius, y1, x2-radius, y1, x2, y1, 
+             x2, y1+radius, x2, y1+radius, x2, y2-radius, x2, y2-radius, x2, y2, 
+             x2-radius, y2, x2-radius, y2, x1+radius, y2, x1+radius, y2, x1, y2, 
+             x1, y2-radius, x1, y2-radius, x1, y1+radius, x1, y1+radius, x1, y1]
+        return canvas.create_polygon(p, **kwargs, smooth=True)
+    def on_drag(self, event):
+        if not self.dragged_item: return
+        dx = event.x - self.last_x
+        dy = event.y - self.last_y
+        self.canvas.move(self.dragged_item, dx, dy)
+        self.last_x, self.last_y = event.x, event.y
+    def on_mousewheel(self, event):
+        scroll_dir = int(-1 * (event.delta / abs(event.delta))) if event.delta != 0 else 0
+        self.sidebar_canvas.yview_scroll(scroll_dir, "units")
+    def sidebar_drag(self, event, word, lbl):
+        if self.dragged_item == "DONE": return
+        x = event.x + lbl.winfo_rootx() - self.canvas.winfo_rootx()
+        y = event.y + lbl.winfo_rooty() - self.canvas.winfo_rooty()
+        if self.dragged_item is None:
+            self.dragged_item = self.create_item(word, x, y)
+            self.last_x, self.last_y = x, y
+        else:
+            dx = x - self.last_x
+            dy = y - self.last_y
+            self.canvas.move(self.dragged_item, dx, dy)
+            self.last_x, self.last_y = x, y
+    def end_sidebar_drag(self, event, word):
+        if self.dragged_item is None:
+            self.create_item(word, random.randint(250, 550), random.randint(50, 520))
+        self.on_drop(event)
+    def on_drop(self, event):
+        self.check_collision(event)
+        self.dragged_item = None
+    def check_collision(self, event):
+        if not self.dragged_item or not self.canvas.find_withtag(self.dragged_item): return
+
+        coords = self.canvas.bbox(self.dragged_item)
+        overlapping_items = self.canvas.find_overlapping(*coords)
+        for other_id in overlapping_items:
+            other_tags = self.canvas.gettags(other_id)
+            other = next((t for t in other_tags if t.startswith("item_")), None)
+            if other and other != self.dragged_item:
+                txt1 = [i for i in self.canvas.find_withtag(self.dragged_item) if self.canvas.type(i) == "text"][0]
+                txt2 = [i for i in self.canvas.find_withtag(other) if self.canvas.type(i) == "text"][0]
+                item1 = self.canvas.itemcget(txt1, "text")
+                item2 = self.canvas.itemcget(txt2, "text")
+                mergetext = merge(item1, item2)
+                self.create_item(mergetext, (coords[0]+coords[2])/2, (coords[1]+coords[3])/2)
+                self.canvas.delete(self.dragged_item)
+                self.canvas.delete(other)
+                self.dragged_item = "DONE" 
+                word = mergetext
+                if word not in rendered_inv:
+                    self.sidebar_canvas.config(scrollregion=self.sidebar_canvas.bbox("all"))
+                    lbl = tk.Label(self.inner, text=word, bg="white", relief="raised", padx=5, pady=2)
+                    lbl.pack(fill="x", padx=5, pady=2)
+                    lbl.bind("<ButtonPress-1>", lambda e, w=word: setattr(self, 'sidebar_word', w))
+                    lbl.bind("<B1-Motion>", lambda e, w=word, l=lbl: self.sidebar_drag(e, w, l))
+                    lbl.bind("<ButtonRelease-1>", lambda e, w=word: self.end_sidebar_drag(e, w))
+                    rendered_inv.append(word)
+                    if word not in inventory:
+                        inventory.append(word)
+                save_inventory(inventory)
+                break 
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = InfiniteCraft(root)
+    root.mainloop() 
+        
