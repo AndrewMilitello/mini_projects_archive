@@ -1,0 +1,94 @@
+#very simple conway's game of life I made in 2024
+array = [[0, 0, 0, 0, 0, 0, 0, 0], 
+         [0, 0, 0, 0, 1, 0, 0, 0], 
+        [0, 0, 0, 0, 0, 1, 0, 0], 
+        [0, 0, 0, 1, 1, 1, 0, 0], 
+        [0, 0, 0, 0, 0, 0, 0, 0], 
+         [0, 0, 0, 0, 0, 0, 0, 0], 
+         [0, 0, 0, 0, 0, 0, 0, 0], 
+         [0, 0, 0, 0, 0, 0, 0, 0]]
+import matplotlib.pyplot as plt
+
+print(array[1], array[2], array[3], array[4])
+
+def copy_array(arry):
+    new = []
+    for i in range(len(arry)):
+        list = []
+        for j in arry[i]:
+            list.append(j)  
+        new.append(list)
+    return new
+
+new_array = copy_array(array) 
+
+fig, ax = plt.subplots()
+n = 1
+
+def surroundingPixelArray(arry, array_indice_1, array_indice_2):
+    adj_squares_array = []
+    orig1 = array_indice_1
+    orig2 = array_indice_2 
+    
+    def checkwithinbounds(arry, first=False):
+        if array_indice_1 >= len(arry) or array_indice_1 < 0:
+            if first == True:
+                return "does not exist"
+        elif array_indice_2 >= len(arry[orig1]) or array_indice_2 < 0:
+            if first == True:
+                return "does not exist"
+        else: 
+            return "clear"
+        return (array_indice_1 % len(arry)), array_indice_2 % len(arry[orig1])
+
+    if checkwithinbounds(arry, first=True) == "does not exist":
+        print("incorrect input")
+        return None
+        
+    for i in range(-1, 2):
+        for j in range(-1, 2):
+            array_indice_1 += i
+            array_indice_2 += j
+            bounds = checkwithinbounds(arry, first=False)
+            if bounds == "clear":
+                if i == 0 and j == 0:
+                    pass
+                else: 
+                    adj_squares_array.append(arry[array_indice_1][array_indice_2])
+            else: 
+                x, y = bounds
+                adj_squares_array.append(arry[x][y])
+            array_indice_1 = orig1
+            array_indice_2 = orig2
+    return adj_squares_array
+
+print(surroundingPixelArray(array, 0, 0))
+
+for m in range(50):
+    for i in range(len(array)):
+        for j in range(len(array[i])):
+            surr = surroundingPixelArray(array, i, j)
+            if 2 <= surr.count(1) <= 3 and array[i][j] == 1:
+                new_array[i][j] = 1
+                continue
+            if surr.count(1) < 2 and array[i][j] == 1:
+                new_array[i][j] = 0
+                continue
+            if surr.count(1) > 3 and array[i][j] == 1:
+                new_array[i][j] = 0
+                continue
+            if surr.count(1) == 3 and array[i][j] == 0:
+                new_array[i][j] = 1
+                continue
+    ax.clear()       
+    ax.imshow(array)        
+    ax.set_title(f"frame {m + 1}")
+    plt.pause(1)
+    array = copy_array(new_array)
+
+
+
+
+
+
+
