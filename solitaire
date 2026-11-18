@@ -1,0 +1,71 @@
+#simple solitaire game 
+import random
+suits = ["S", "C", "H", "D"]
+numbers = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"] 
+cards = [str(i + j) for i in suits for j in numbers]
+pool = cards
+def shuffle_cards_pool():
+    random.shuffle(pool)
+    random.shuffle(pool)
+    return pool
+shuffle_cards_pool()
+def check_color(card):
+    if "S" in card or "C" in card:
+        return "B"
+    else: return "R"
+def check_valid_placement(c1, c2):
+    if int(c1[1]) + 1 == int(c2[1]):
+        if check_color(c1) != check_color(c2):
+            return True
+    return False
+tableuxs = [{}, {}, {}, {}, {}, {}, {}]
+for tableau in [1, 2, 3, 4, 5, 6, 7]:
+    for t in range(tableau-1):
+        tableuxs[tableau-1][pool[0]] = 'X'
+        pool.pop(0)
+    tableuxs[tableau-1][pool[0]] = pool[0]
+    pool.pop(0)
+foundations = [{}, {}, {}, {}]
+waste = []
+while True:
+    print('\n')
+    print("S: spades, H: Hearts, D: Diamonds, C: Clubs")
+    [print(f"T{t+1}:{str(list(tableuxs[t].values()))}\n") for t in range(len(tableuxs))]
+    print(f"waste pile top: {waste[0] if len(waste) > 0 else []}")
+    [print(f"F{f+1}:{str(list(foundations[f].values()))}") for f in range(len(foundations))]
+    choice = input("Move card FROM: \n W: waste, T: tableaux, F: foundation, D: draw from pool").lower()
+    if 'd' in choice:
+        if len(pool) > 0:
+            lastcard = pool[-1]
+            print(f"Card {lastcard} removed from pool and put in waste pile")
+            pool.pop(-1)
+            waste.insert(0, lastcard)
+        else:
+            print("Pool empty: replenishing pool with waste pile")
+            pool = waste
+        input("type any key to continue")
+        continue
+    elif 'w' in choice:
+        if len(waste) > 0:
+            targ_card = waste[0] 
+            targ_location = input(f"Move {targ_card} TO: \n TN: tableaux number N (ex: T1), F: foundation").lower()
+            if 't' in targ_location:
+                try:
+                    tableaux_num = int(targ_location[1])
+                    top_card = next(reversed(tableuxs[tableaux_num-1].values()))
+                    if check_valid_placement(top_card, targ_card):
+                        tableuxs[tableaux_num-1][targ_card] = targ_card
+                    else:
+                        print("invalid placement")
+                except Exception as e:
+                    print(f"Error: incorrect format, {e}")
+        else:
+            print("Error: waste empty, please draw to replenish")
+        input("type any key to continue")
+        continue
+            
+        
+        
+    else: 
+        print(f"Error: choice '{choice}' not found")
+        continue
