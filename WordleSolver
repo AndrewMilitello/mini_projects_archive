@@ -1,0 +1,125 @@
+from nltk.corpus import brown
+import numpy as np
+import nltk
+nltk.download('brown')
+print("")
+
+letwords = []
+for i in brown.words():
+    if len(i) == 5 and "-" not in i and "." not in i and "$" not in i and "," not in i and i == i.lower():
+        letwords.append(str(i.lower()))
+possible_words_list = letwords
+guess = input("What would you like the first guess to be? ")
+if guess:
+    if guess == 'random':
+        guess = np.random.choice(letwords)
+    first_guess = guess
+else:
+    first_guess = np.random.choice(letwords)
+
+curr_guess = first_guess
+def find_occurances(text, pattern):
+    indices = []
+    start = 0
+    while True:
+        index = text.find(pattern, start)
+        if index == -1:
+            break
+        indices.append(index)
+        start = index + 1  
+
+    return indices
+print("")
+print("")
+print("")
+correctset = []
+for i in range(6):    
+    print("guess " + str(i+1) + ":" + curr_guess)
+
+    for i in range(len(curr_guess)):
+        new_words_list = []
+        direction = input("what is the color that came as a result of the letter " + str(curr_guess[i].upper()) + ":")
+        direction = direction.lower()
+        if direction == "g":
+            for j in (possible_words_list):
+                j = str(j)
+
+                if i in find_occurances(str(j), str(curr_guess[i])):
+
+                    new_words_list.append(j)
+            if curr_guess[i] not in correctset:
+                correctset.append(curr_guess[i])
+        elif direction == "y":
+            for j in (possible_words_list):
+                if str(curr_guess[i]).lower() in j.lower() and str(curr_guess[i]).lower() not in j[i]:
+                    new_words_list.append(j)
+            if curr_guess[i] not in correctset:
+                correctset.append(curr_guess[i])
+            
+            
+        
+        elif direction.strip() == "x":
+            
+            if curr_guess[i] not in correctset:
+                for j in (possible_words_list):
+                    if str(curr_guess[i]).lower() not in j:
+                        new_words_list.append(j)
+            else:
+                for j in (possible_words_list):
+                    if str(curr_guess[i]).lower() not in j[i]:
+                        new_words_list.append(j)
+                         
+        else:
+            print("invalid input")
+            direction = str(input("type g for green x for gray y for yellow for letter " + curr_guess[i].upper() + ":").lower())
+            if direction == "g":
+                for j in (possible_words_list):
+                    j = str(j)
+
+                    if i in find_occurances(str(j), str(curr_guess[i])):
+
+                        new_words_list.append(j)
+                if curr_guess[i] not in correctset:
+                    correctset.append(curr_guess[i])
+            elif direction == "y":
+                for j in (possible_words_list):
+                    if str(curr_guess[i]).lower() in j.lower() and str(curr_guess[i]).lower() not in j[i]:
+                        new_words_list.append(j)
+                if curr_guess[i] not in correctset:
+                    correctset.append(curr_guess[i])
+            
+            
+        
+            elif direction.strip() == "x":
+            
+                if curr_guess[i] not in correctset:
+                    for j in (possible_words_list):
+                        if str(curr_guess[i]).lower() not in j:
+                            new_words_list.append(j)
+                else:
+                    for j in (possible_words_list):
+                        if str(curr_guess[i]).lower() not in j[i]:
+                            new_words_list.append(j)
+                         
+
+                    
+                    
+            
+        possible_words_list = list(set(new_words_list))
+    #debug print statements go here
+    freqs = nltk.FreqDist([w.lower() for w in brown.words()])
+    wordlist_sorted = sorted(possible_words_list, key=lambda x: freqs[x.lower()], reverse=True)
+    if len(wordlist_sorted) > 0:
+        curr_guess = wordlist_sorted[0]
+    else: 
+        print("error, word not in database or human typo")
+        break
+    if len(possible_words_list) == 1:
+        print("Wordle Solved!")
+        print("Your word is: " + curr_guess)
+        print("note: this may not be the correct word due to a missing word in the database")
+        break
+    print("possible words", possible_words_list[:5])
+    print(str(len(possible_words_list)) + " possible words")
+    print("")
+    
