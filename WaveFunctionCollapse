@@ -1,0 +1,119 @@
+#wave function collapse map generator from tileset 
+import numpy as np
+import time
+
+tileset = [
+    "🧱🧱🧱🧱", 
+    "⬛⬛⬛⬛",
+    "🧱🧱⬛⬛",
+    "⬛💧💧🧱",
+    "🧱💧💧⬛", 
+    "⬛🧱⬛🧱",
+    "🧱🧱🧱⬛",
+    "⬛⬛⬛⬛" 
+]
+
+grid_h, grid_w = 10, 10
+
+def get_edge(tile, direction):
+    lines = [tile[:2], tile[2:]]
+    if direction == "N": return lines[0]
+    if direction == "S": return lines[1]
+    if direction == "W": return lines[0][0] + lines[1][0]
+    if direction == "E": return lines[0][1] + lines[1][1]
+
+rules = {}
+
+for t1 in tileset:
+    rules[t1] = {"N": [], "S": [], "E": [], "W": []}
+    for t2 in tileset:
+        if get_edge(t1, "N") == get_edge(t2, "S"):
+            rules[t1]["N"].append(t2)
+        if get_edge(t1, "S") == get_edge(t2, "N"):
+            rules[t1]["S"].append(t2)
+        if get_edge(t1, "E") == get_edge(t2, "W"):
+            rules[t1]["E"].append(t2)
+        if get_edge(t1, "W") == get_edge(t2, "E"):
+            rules[t1]["W"].append(t2)
+
+map = np.empty((grid_w, grid_h), dtype=object)
+for x in range(grid_w):
+    for y in range(grid_h):
+        map[x][y] = list(tileset)
+
+def choose_lowest_entropy(map):
+    entropies = np.array([[len(v) if len(v) > 1 else 1000 for v in row] for row in map])
+    lowest = np.min(entropies) 
+    coords = np.argwhere(entropies == lowest)
+    choice = np.random.choice(len(coords))
+    i, j = coords[choice]
+    entropy = entropies[i, j]
+    return(i, j, entropy if entropy < 1000 else 0)
+
+while True:
+    failed = False
+    i, j, entropy = choose_lowest_entropy(map)
+    if entropy == 0:
+        break
+    possible_values = map[i][j]
+    collapsed_val = possible_values[np.random.choice(entropy)]
+    map[i][j] = [collapsed_val]
+    queue = []
+    queue.append((i, j))
+    number_neighbors_changed = 0
+    while len(queue) > 0:
+        a, b = queue.pop(0)
+        number_neighbors_changed += 1
+        surrounding = {
+            "N": (0, -1), 
+            "S": (0, 1), 
+            "E": (1, 0), 
+            "W": (-1, 0)
+        }
+        for direction in surrounding:
+            da, db = surrounding[direction]
+            na, nb = a + da, b + db
+            if 0 <= na < grid_w and 0 <= nb < grid_h: 
+                possibilities = []
+                for value in map[a][b]:
+                    possibilities += rules[value][direction]
+                possibilities = list(set(possibilities))
+                old_entropy = len(map[na][nb]) 
+                new = list(set(map[na][nb]) & set(possibilities))
+                if len(new) < old_entropy:
+                    if len(new) == 0:
+                        for x in range(grid_w):
+                            for y in range(grid_h):
+                                map[x][y] = list(tileset)
+                        failed = True
+                    else:
+                        map[na][nb] = new 
+                        queue.append((na, nb))
+            if failed: break
+        if failed: break
+    if failed: 
+        print("failed, resetting")
+        continue
+    print(number_neighbors_changed)    
+
+print('done')
+def visualize(map_grid):
+    w = len(map_grid)
+    h = len(map_grid[0])
+    
+    for y in range(h):
+        top_line = ""
+        bottom_line = ""
+        for x in range(w):
+            cell = map_grid[x][y]
+            if len(cell) == 1:
+                tile = cell[0] 
+                top_line += tile[0] + tile[1]
+                bottom_line += tile[2] + tile[3]
+            else:
+                top_line += "🔳🔳"
+                bottom_line += "🔳🔳"
+        print(top_line)
+        print(bottom_line)
+
+visualize(map)
