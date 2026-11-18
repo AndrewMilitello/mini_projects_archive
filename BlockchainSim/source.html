@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Blockchain Demo</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; background: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        input, button { padding: 10px; margin: 5px 0; display: block; width: 100%; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #0056b3; }
+        #log { background: #222; color: #0f0; padding: 15px; border-radius: 5px; font-family: monospace; max-height: 300px; overflow-y: auto; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+    <h1>Blockchain Interactive Demo</h1>
+    
+    <div class="card">
+        <h3>1. Send Transaction</h3>
+        <input type="text" id="sender" placeholder="Sender Name">
+        <input type="text" id="recipient" placeholder="Recipient Name">
+        <input type="number" id="amount" placeholder="Amount">
+        <input type="number" id="fee" placeholder="Fee">
+        <button onclick="addTransaction()">Add to Mempool</button>
+    </div>
+
+    <div class="card">
+        <h3>2. Mine & Add Block</h3>
+        <input type="text" id="minerUser" placeholder="Your Miner Name">
+        <button onclick="mineAndAdd()">Start Mining Process</button>
+    </div>
+
+    <div class="card">
+        <h3>3. Tools</h3>
+        <button onclick="viewBlockchain()" style="background:#28a745;">View Full Blockchain</button>
+        <button onclick="testBlockchainAPI()" style="background:#6c757d;">Check API Status</button>
+        <button onclick="viewMempool()" style="background:#6c757d;">View Current Transaction Mempool</button>
+    
+    </div>
+
+    <h3>Activity Log</h3>
+    <div id="log">Console initialized...</div>
+
+    <script>
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        const BASE_URL = "https://crryptographic.pythonanywhere.com";
+
+        function log(msg) {
+            const l = document.getElementById('log');
+            l.innerHTML += `<br>> ${msg}`;
+            l.scrollTop = l.scrollHeight;
+        }
+        
+        async function testBlockchainAPI() {
+            try {
+                const res = await fetch(`${BASE_URL}/test-api`);
+                const data = await res.text();
+                log(`API Status: ${data}`);
+            } catch (e) { log(`Error: ${e.message}`); }
+        }
+        async function viewMempool() {
+            try {
+                const res = await fetch(`${BASE_URL}/view-mempool`);
+                const data = await res.text();
+                log(`Current Transactions: ${data}`);
+            } catch (e) { log(`Error: ${e.message}`); }
+        }
+
+        async function addTransaction() {
+            const s = document.getElementById('sender').value;
+            const r = document.getElementById('recipient').value;
+            const a = document.getElementById('amount').value;
+            const f = document.getElementById('fee').value;
+            
+            try {
+                const res = await fetch(`${BASE_URL}/add-transaction?sender=${s}&recipient=${r}&amount=${a}&fee=${f}`);
+                const data = await res.text();
+                log(data);
+            } catch (e) { log(`Tx Error: ${e.message}`); }
+        }
+
+        async function mineAndAdd() {
+            const user = document.getElementById('minerUser').value;
+            if(!user) return alert("Enter miner name!");
+
+            log("Step 1: Fetching candidate block...");
+            try {
+                // Get the candidate block object from your API
+                const candidateRes = await fetch(`${BASE_URL}/create-block-object`);
+                let block = await candidateRes.json();
+                
+                log("Step 2: Local mining (Brute forcing proof)...");
+                block.transactions[0].recipient = user; 
+                log(JSON.stringify(block, null, 2));
+                let nonce = 0;
+                let hash = "";
+                const difficulty = "0000";
+    
+                log("Mining started...");
+                const startTime = Date.now();
+                block.proof = "repLaCe_ME7811454";
+                const sortedKeys = Object.keys(block).sort();
+                let baseString = JSON.stringify(block, sortedKeys);
+                // The Mining Loop
+                while (true) {
+                    const blockString = baseString.replace('"repLaCe_ME7811454"', nonce); 
+                    hash = CryptoJS.SHA256(blockString).toString();
+                    if (nonce % 6000 === 0) {
+                        log(`${nonce} nonces tried, proceeding to next batch`); 
+                        await sleep(1); 
+                    }
+                    if (hash.startsWith(difficulty)) {
+                        const endTime = Date.now();
+                        block.proof = nonce
+                        log(`Success! Mined in ${(endTime - startTime) / 1000}s`);
+                        log(`Nonce: ${nonce}`);
+                        log(`Hash: ${hash}`);
+                        break;
+                    }
+                    nonce ++;
+                }
+                log("Step 3: Submitting solved block to chain...");
+                const addRes = await fetch(`${BASE_URL}/add-block`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(block, Object.keys(block).sort()) 
+                });
+                const result = await addRes.text();
+                log(`Final Result: ${result}`);
+            } catch (e) { log(`Mining Error: ${e.message}`); }
+        }
+
+        async function viewBlockchain() {
+            try {
+                const res = await fetch(`${BASE_URL}/blockchain-data`);
+                const data = await res.json();
+                log(`Blockchain: ${JSON.stringify(data, null, 2)}`);
+            } catch (e) { log(`Error: ${e.message}`); }
+        }
+    </script>
+</body>
+</html>
