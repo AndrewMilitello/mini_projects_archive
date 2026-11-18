@@ -1,1 +1,1 @@
-These are projects I made over the last three years as I taught myself python and began to experiment with AI
+These are mini projects I created in past years while teaching myself python and learning about AI. 
