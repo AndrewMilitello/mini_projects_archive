@@ -1,0 +1,102 @@
+#Find the shortest path length between two wikepedia pages using bidirectional search 
+import requests
+from bs4 import BeautifulSoup
+url = "https://wikipedia.org/"
+
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
+}
+
+article = input("starting page:").replace('https://en.wikipedia.org/', "/")
+endingpage = input("ending page: ").replace('https://en.wikipedia.org/', "/")
+fqueue = [article]
+bqueue = [endingpage]
+fvisited = set([article])
+bvisited = set([endingpage])
+parentnodes = {}
+bparentnodes = {}
+def process_wiki(url):
+    page = requests.get(url, headers=headers)
+    page = BeautifulSoup(page.text, 'html.parser')
+    page = page.find('div', id='mw-content-text')
+    page = page.find_all('p')
+    links = []
+    for i in page:
+        l = i.find_all('a')
+        for i in l:
+            links.append(i)
+    links = list(set(links))
+    cleaned_links = []
+    for link in links:
+        link = link.get('href')
+        if link:
+            if link[:5] == '/wiki' and ":" not in link and link not in fvisited:
+                cleaned_links.append(link)
+    return cleaned_links
+
+def backwards_wiki(url):
+    if url.startswith('/wiki/'):
+        url = url.replace('/wiki/', "")
+    params = {
+        'action': 'query',
+        'list': 'backlinks',
+        'bltitle': url,
+        'bllimit': 700, 
+        'format': 'json',
+        'redirects': 1
+    }
+    page = requests.get('https://en.wikipedia.org/w/api.php', params=params, headers=headers)
+
+    page = page.json()
+    page = list(page['query']['backlinks'])
+    return ['/wiki/' + str(i['title'].replace(' ', '_' )) for i in page]
+
+
+def checkqueue():
+
+    if len(bqueue) <= len(fqueue):
+        bcurrent = bqueue[0]    
+        bneighbors = backwards_wiki(str(bcurrent))
+        for k in bneighbors:
+            if k not in bvisited:
+                bparentnodes[k] = bcurrent
+                bqueue.append(k)
+                bvisited.add(k)
+                if k in fvisited:
+                    return k
+        bqueue.pop(0)
+    else:
+        fcurrent = fqueue[0]
+        fneighbors = process_wiki(str(url) + str(fcurrent))
+        for j in fneighbors:
+            if j not in fvisited:
+                parentnodes[j] = fcurrent
+                fqueue.append(j)
+                fvisited.add(j)
+                if j in bvisited:
+                    return j
+        fqueue.pop(0)
+
+while fqueue and bqueue:
+    intersection = checkqueue()
+    if intersection:
+        break
+print("processing")
+
+curr = intersection
+path = []
+while curr != article:
+    path.append(curr)
+    curr = parentnodes[curr]
+path.append(article)
+path.reverse()
+curr = bparentnodes[intersection]
+pathb = []
+while curr != endingpage:
+    pathb.append(curr)
+    curr = bparentnodes[curr]
+path = path + pathb
+path.append(endingpage)
+if article == endingpage:
+    path = article
+print(path)
