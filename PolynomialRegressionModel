@@ -1,0 +1,139 @@
+# My first real ML model in python, contains a full training loop, made in September of 2025, was inspiration for my Polynomial regressionlighting AI
+import random
+import math
+hidden_layer_1_size = 200
+hidden_layer_2_size = 100
+output_degree = 3
+output_degree += 1
+training_low = 0
+training_high = 1.5
+#init Layer class
+class Layer():
+    def __init__(self, count, lr=0.01, is_output=False):
+        self.weights = [random.gauss(0, math.sqrt(2.0 / count)) for _ in range(count)]
+        self.bias = 0
+        self.lr = lr
+        self.is_output = is_output
+    def activate(self, input):
+        s = 0
+        for i, w in zip(input, self.weights):
+            s += i * w 
+        if self.is_output: return s
+        return s if s > 0 else s * 0.01
+#init neur net architecture
+class Network():
+    def __init__(self, lr=0.01, ptcount=50):
+        self.lr = lr
+        self.input_count = ptcount * 2
+        self.hidden_layer = [Layer(count=self.input_count, lr=lr) for _ in range(hidden_layer_1_size)]
+        self.hidden_layer_2 = [Layer(count=hidden_layer_1_size, lr=lr) for _ in range(hidden_layer_2_size)]
+        self.output_layer = [Layer(count=hidden_layer_2_size, lr=lr, is_output=True) for _ in range(output_degree)]
+
+    def Predict(self, input):
+        self.last_input = input
+        self.hidden_output = [v.activate(input) for v in self.hidden_layer]
+        self.hidden2_output = [v.activate(self.hidden_output) for v in self.hidden_layer_2]
+        self.final_output = [v.activate(self.hidden2_output) for v in self.output_layer]
+        return self.final_output
+#this is what we want to learn
+def correct_function(x):
+    return 32 * x**6 - 48 * x**4 + 18 * x**2 - 1
+
+#init training data
+trainX = [random.uniform(training_low, training_high) for i in range(1000)]
+trainY = [correct_function(x) for x in trainX]
+minX = min(trainX)
+maxX = max(trainX)
+mean = sum(trainX)/len(trainX)
+s = math.sqrt(sum((x - mean)**2 for x in trainX) / len(trainX))
+trainX= [(x - mean) / s for x in trainX]#switch if acc low
+
+maxY = max(abs(yval) for yval in trainY)
+trainY = [y/maxY for y in trainY]
+train = []
+for i in range(10):
+    idx = random.sample(range(len(trainX)), 50)
+    flat_ipt = []
+    for x in idx:
+        flat_ipt.append(trainX[x])
+        flat_ipt.append(trainY[x])
+    train.append(flat_ipt)
+#run training loop
+predictor = Network(lr=0.001, ptcount=50)
+epochs = 280
+for _ in range(epochs):
+    random.shuffle(train)
+    total_acc = 0
+    for t in train:
+        #forward_pass
+        pred = predictor.Predict(t)
+        #calc_error
+        a, b, c, d = pred
+        error = 0
+        error2 = 0
+        ptct = (len(t)/2)
+        a_cont, b_cont, c_cont, d_cont = [0, 0, 0, 0]
+        accerr = 0
+        for v_idx in range(0, len(t), 2):
+            v = t[v_idx]
+            predicted = a * v ** 3 + b * v **2 + c * v + d 
+            actual = t[v_idx+1]
+            error = (actual - predicted)
+            accerr += abs(error) / ptct
+            error2 += error**2 
+            a_cont += error * v ** 3
+            b_cont += error * v**2
+            c_cont += error * v
+            d_cont += error
+
+        error = error2 / ptct
+        #find output contributions
+        contributions = [a_cont/ptct, b_cont/ptct, c_cont/ptct, d_cont/ptct]
+        contributions = [max(min(c, 0.1), -0.1) for c in contributions]
+        #update output 
+        for n, neuron in enumerate(predictor.output_layer):
+            for w in range(len(neuron.weights)):
+                neuron.weights[w] += predictor.lr * contributions[n] * predictor.hidden2_output[w]
+            neuron.bias += predictor.lr * contributions[n]
+        #find hidden layer 2 contributions
+        h2_contributions = []
+        
+        for n in range(hidden_layer_2_size):
+            total_cont = 0
+            for w in range(output_degree):
+                total_cont += contributions[w] * predictor.output_layer[w].weights[n]
+            h2_contributions.append(total_cont * (1 if predictor.hidden2_output[n] > 0 else 0.01))
+        #update hidden layer 2 
+        for n, neuron in enumerate(predictor.hidden_layer_2):
+            for w in range(len(neuron.weights)):
+                neuron.weights[w] += predictor.lr * h2_contributions[n] * predictor.hidden_output[w]
+            neuron.bias += predictor.lr * h2_contributions[n]
+      
+        
+        #find hidden layer 1 contributions
+        h1_contributions = []
+        
+        for n in range(hidden_layer_1_size):
+            total_cont = 0
+            for w in range(hidden_layer_2_size):
+                total_cont += h2_contributions[w] * predictor.hidden_layer_2[w].weights[n]
+            h1_contributions.append(total_cont * (1 if predictor.hidden_output[n] > 0 else 0.01))
+        #update hidden layer 1 
+        for n, neuron in enumerate(predictor.hidden_layer):
+            for w in range(len(neuron.weights)):
+                neuron.weights[w] += predictor.lr * h1_contributions[n] * predictor.last_input[w]
+            neuron.bias += predictor.lr * h1_contributions[n]
+    print(f"{error:.5f}")
+    print(100-accerr*100)
+    
+#dict = ({k: f"{maxY * (sum(v) / len(train)):.2f}" for k, v in zip(['a', 'b', 'c', 'd'], zip(*[predictor.Predict(i) for i in train]))})
+
+#print("y=" + dict['a'] + "x^{3}+"+dict['b']+"x^{2}+"+dict['c']+"x+"+dict['d'])
+
+
+a, b, c, d = [o * maxY for o in predictor.Predict(train[8])]
+
+#print(f"y = {a:.4f}x^3 + {b:.4f}x^2 + {c:.4f}x + {d:.4f}")
+
+x = f"((x - {mean:.6f}) / {s:.6f})"
+print(f"y = {a:.4f}*{x}^3 + {b:.4f}*{x}^2 + {c:.4f}*{x} + {d:.4f}")
