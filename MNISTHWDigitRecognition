@@ -1,0 +1,111 @@
+#Classic AI project, trained digit recognition model on the MNIST dataset 
+from sklearn.datasets import fetch_openml
+from sklearn.neural_network import MLPClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+from sklearn.model_selection import RandomizedSearchCV
+from scipy.stats import loguniform
+from copy import deepcopy
+import numpy as np
+from PIL import Image, ImageDraw
+import joblib
+import os
+import random
+import pandas
+import numpy as np
+import math
+import tkinter as tk
+
+ds_path = 'mnist.joblib'
+try:
+    with open(ds_path, 'rb') as f:
+        mnist_dataset = joblib.load(ds_path)
+except (FileNotFoundError, ValueError, EOFError):
+    mnist_dataset = fetch_openml('mnist_784', version=1, as_frame=False, return_X_y=False, parser='auto')
+    if os.path.exists(ds_path):
+        os.remove(ds_path)
+    with open(ds_path, 'wb') as f:
+        joblib.dump(mnist_dataset, f, compress=3)
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+random.seed(1)
+x, y = shuffle(mnist_dataset.data.astype('uint8'), mnist_dataset.target.astype(int), random_state=0)
+print('shuffled')
+
+trainX, testX, trainY, testY = train_test_split(
+    x, y, train_size=50000, test_size=10000, random_state=0
+)
+print('prepreccessed')
+'''
+mlp = MLPClassifier(
+    hidden_layer_sizes=(512, 256, 128),
+    activation='relu',
+    solver='adam',
+    learning_rate_init=0.001,
+    batch_size=256 
+)
+
+bsize = 1000 
+c = np.unique(y)
+print("training")
+for epoch in range(5):
+    trainX, trainY = shuffle(trainX, trainY)
+    for i in range(0, len(trainX), bsize):
+        Xb = trainX[i:i + bsize].astype('float32') / 255.0
+        yb = trainY[i:i + bsize]
+        mlp.partial_fit(Xb, yb, classes=c)
+    acc = mlp.score(testX[:1000].astype('float32') / 255.0, testY[:1000])
+    if acc >= 0.98:
+        joblib.dump(mlp, 'mnist_pipeline.joblib')
+    print(f"Acc: {acc:.4f}")
+mlp.learning_rate_init = 0.00007
+for epoch in range(5):
+    for i in range(0, len(trainX), bsize):
+        Xb = trainX[i:i + bsize].astype('float32') / 255.0
+        yb = trainY[i:i + bsize]
+        mlp.partial_fit(Xb, yb, classes=c)
+    print(f"Acc: {mlp.score(testX[:1000].astype('float32') / 255.0, testY[:1000]):.4f}")
+print(f"Acc: {mlp.score(testX[:5000].astype('float32') / 255.0, testY[:5000]):.4f}")
+'''
+mlp = joblib.load('mnist_pipeline.joblib')
+
+#joblib.dump(mlp, 'mnist_pipeline.joblib')
+
+print(mlp.score(testX, testY))
+
+print('done')
+class Interface():
+    def __init__(self, root):
+        self.root = root
+        self.root.title = "Number Predictor"
+        self.canvas = tk.Canvas(root, width=280, height=280, bg='black')
+        self.canvas.pack()
+        self.image = Image.new("L", (280, 280), "black")
+        self.draw = ImageDraw.Draw(self.image)
+        tk.Button(root, text="Predict", command=self.predict).pack(side='left')
+        tk.Button(root, text="Clear", command=self.clear).pack(side='right')
+        self.label = tk.Label(root, text="Draw a digit", font=("Arial", 20))
+        self.label.pack()
+        self.canvas.bind("<B1-Motion>", self.paint)
+    def paint(self, event):
+        x, y = event.x, event.y
+        r = 15
+        self.canvas.create_oval(x-r, y-r, x+r, y+r, fill='white', outline='white')
+        self.draw.ellipse([x-r, y-r, x+r, y+r], fill='white')
+    def predict(self):
+        img = self.image.resize((28, 28)).convert('L')
+        img = (np.array(img).astype('float32') / 255.0).reshape(1, -1)
+        prediction = mlp.predict(img)
+        print(prediction)
+        self.label.config(text=f"Predicted: {prediction[0]}")
+    def clear(self):
+        self.canvas.delete("all")
+        self.image = Image.new("L", (280, 280), "black")
+        self.draw = ImageDraw.Draw(self.image)
+        self.label.config(text="Draw a digit")
+root = tk.Tk()
+app = Interface(root)
+root.mainloop()
