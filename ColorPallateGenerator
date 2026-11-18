@@ -1,0 +1,38 @@
+import random
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+fig, ax = plt.subplots()
+n=5
+cl = []
+'''
+for i in range(n):
+    
+    color = (random.random(), random.random(), random.random())
+    cl.append(color)'''
+cmap = plt.get_cmap('nipy_spectral_r')
+cl = [cmap(i/n) for i in range(n)]
+samples = 2
+tolerance = 0.4
+similarity = 0.7 # 0-2
+for b in range(samples):
+    idx = random.randint(0, n-1) 
+    if b == 0:
+        cl[idx] = (52/255, 104/255, 124/255)
+    chosen_color = cl[idx]
+    opp = sorted(cl, key = lambda i: sum((a-b) **2 for a, b in zip(chosen_color, i)))[-1]
+    oppidx = cl.index(opp)
+
+    newc = tuple(
+        (random.uniform(opp[i]-tolerance, opp[i]+tolerance)-(opp[i]-tolerance))/(2 * tolerance) for i in range(3))
+    cl[oppidx] = newc
+for k in cl:
+    col = tuple((similarity*a + (2-similarity) * b)/2 for a, b in zip(chosen_color, k))
+    cl[cl.index(k)] = col
+cl.sort(key=lambda c: 0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2])
+for j in range(n):
+    rect = Rectangle((1, j+1), 2, 1, linewidth=2, edgecolor=cl[j], facecolor=cl[j])
+    ax.add_patch(rect)
+
+ax.set_xlim([0, 4])
+ax.set_ylim([1, n+1])
+plt.show()
