@@ -1,0 +1,187 @@
+#reaction time test coded in Pygame and Pillow
+from PIL import Image, ImageChops
+import os
+import time
+import io
+import random
+import requests
+import numpy as np
+import pygame
+import math
+
+ids = ["dog", "cat", "bird", "fish", "tree", "hat", "flower", "bug", "vehicle"]
+
+levelslist = []
+def save_image(link, location, url=True):
+    if url == True:
+        response = requests.get(link)
+        img = io.BytesIO(response.content)
+        img.seek(0)
+    else:
+        img = link
+    img = Image.open(img).convert('L')
+    img.thumbnail((400, 400), Image.Resampling.LANCZOS) 
+    img.save(location, quality=85)
+'''
+link ='https://www.londontravelwatch.org.uk/wp-content/uploads/2024/11/Number-11-bus-at-Sloane-Square-bus-stop.jpg'
+
+
+b = False
+while True:
+    if b == True:
+        break
+    for x in range(0, 10):
+        if b == True:
+            break
+        for y in range(0, 10):
+            if os.path.isfile(f"images/image-{ x }-{ y }.jpg"):
+                continue
+            else:
+                save_image(link, f"images/image-{ x }-{ y }.jpg", url=True)
+                print(x)
+                b = True
+                break
+
+'''
+
+pygame.quit()
+#pygame setup
+pygame.init()
+screen_width = 800
+screen_height = 600
+screen = pygame.display.set_mode((screen_width, screen_height))
+pygame.display.set_caption("Test Window")
+clock = pygame.time.Clock()
+background_color = (255, 255, 255)
+
+def prepare_image(img_id, blur_id):
+    img1 = Image.open(f"images/image-{img_id[0]}-{img_id[1]}.jpg").convert("RGBA")
+    img2 = Image.open(f'blurs/blur{blur_id}.jpg').convert("RGBA").resize(img1.size)
+    combined_image = ImageChops.blend(img1, img2, 0.68)
+    imgw, imgh = combined_image.size
+    horizborder = screen_width - imgw
+    vertborder = screen_height-imgh
+    if horizborder > vertborder:
+        combined_image = combined_image.resize((screen_width, math.floor(imgh * (screen_width/imgw))), Image.Resampling.LANCZOS)
+    else:
+        combined_image = combined_image.resize((math.floor(imgw * (screen_height/imgh)), screen_height), Image.Resampling.LANCZOS)
+    image_surface = pygame.image.frombuffer(combined_image.tobytes(), combined_image.size, combined_image.mode).convert_alpha()
+    image_rect = image_surface.get_rect(center=(screen_width // 2, screen_height // 2))
+    return image_surface, image_rect
+
+a = 300
+b = 310
+start_time = pygame.time.get_ticks()
+running = True
+increment = False
+left = pygame.Rect(120, 150, 120, 70)
+middle1 = pygame.Rect(260, 150, 120, 70)
+middle2 = pygame.Rect(400, 150, 120, 70)
+right = pygame.Rect(540, 150, 120, 70)
+text2 = pygame.font.Font(None, 50)
+text2 = text2.render("What was just shown in the image?", True, (0, 0, 0))
+level = 1
+
+for i in range(40):
+    waiting_for_click = True
+    chosen_ans = ""
+    #countdown
+    for i in [3, 2, 1]:
+        screen.fill(background_color)
+        text = pygame.font.Font(None, 100)
+        text = text.render(f"{i}", True, (0, 0, 0))
+        screen.blit(text, (screen_width/2, screen_height/2.5))
+        pygame.display.update()
+        id = random.randint(0, 7)
+        surf, rect = prepare_image((id, random.randint(0, 9)), np.random.randint(0, 9))
+        clock.tick_busy_loop(1.5)
+    
+    screen.fill(background_color)
+    pygame.display.update()
+    clock.tick_busy_loop(10)
+    #show image
+    screen.blit(surf, rect)
+    pygame.display.update()
+    clock.tick_busy_loop(level)
+    #question setup+logic
+    sample = random.sample(ids, 4)
+    if ids[id] not in sample:
+        sample[random.randint(0, 3)] = ids[id]
+    
+    a1 = pygame.font.Font(None, 50)
+    a1 = a1.render(f"{sample[0]}", True, (0, 0, 0))
+    a2 = pygame.font.Font(None, 50)
+    a2 = a2.render(f"{sample[1]}", True, (0, 0, 0))
+    a3 = pygame.font.Font(None, 50)
+    a3 = a3.render(f"{sample[2]}", True, (0, 0, 0))
+    a4 = pygame.font.Font(None, 50)
+    a4 = a4.render(f"{sample[3]}", True, (0, 0, 0))
+    
+    while waiting_for_click:
+        screen.fill(background_color)
+        pygame.draw.rect(screen, (0, 0, 0), left, 3)
+        pygame.draw.rect(screen, (0, 0, 0), middle1, 3)
+        pygame.draw.rect(screen, (0, 0, 0), middle2, 3)
+        pygame.draw.rect(screen, (0, 0, 0), right, 3)
+        screen.blit(text2, (0.1 * screen_width, 0.1*screen_height))
+        screen.blit(a1, (130, 150))
+        screen.blit(a2, (270, 150))
+        screen.blit(a3, (410, 150))
+        screen.blit(a4, (570, 150))
+        
+        for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if left.collidepoint(event.pos):
+                    chosen_ans = sample[0]
+                    print(chosen_ans)
+                    waiting_for_click = False
+                    break
+                elif middle1.collidepoint(event.pos):
+                    chosen_ans = sample[1]
+                    print(chosen_ans)
+                    waiting_for_click = False
+                    break
+                elif middle2.collidepoint(event.pos):
+                    chosen_ans = sample[2]
+                    print(chosen_ans)
+                    waiting_for_click = False
+                    break
+                elif right.collidepoint(event.pos):
+                    chosen_ans = sample[3]
+                    print(chosen_ans)
+                    waiting_for_click = False
+                    break
+        
+        pygame.display.update()
+        clock.tick_busy_loop(60)
+
+    if str(chosen_ans) == str(ids[id]):
+        if level >= 50:
+            level *= 1.09
+        else:
+            level *= 1.2
+        print("correct")
+    else: 
+        level *= 0.775
+        print("incorrect")
+    if level <= 0:
+        level = 1
+    levelslist.append(level)
+    print(str(ids[id]))
+    print(level)
+pygame.display.update()
+clock.tick(60)
+print('done')
+print(max(levelslist))
+while True:
+    screen.fill(background_color)
+    score = pygame.font.Font(None, 20)
+    score = score.render(f"Your score is: {sum(levelslist) + max(levelslist)**2}", True, (0, 0, 0))
+    screen.blit(score, (screen_width/2, 150))
+    score2 = pygame.font.Font(None, 30)
+    score2 = score2.render(f"Your maximum image processing capability is: {(1000/max(levelslist)):.3f} milliseconds", True, (0, 0, 0))
+    screen.blit(score2, (50, 250))
+    pygame.display.update()
+    clock.tick(60)
+    
+    
