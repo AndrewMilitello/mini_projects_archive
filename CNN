@@ -1,0 +1,79 @@
+#My first CNN implementation - Based on notes I took from a YT video
+import numpy as np
+import scipy
+def relu(x):
+    return np.maximum(0, x)
+def leaky_relu(x):
+    return np.where(x > 0, x, x * 0.01)
+def sigmoid(x):
+    return (1 / (1 + np.exp((-x))))
+activation_derivatives = {
+        'relu': lambda x: np.where(x > 0, 1, 0),
+        'leaky_relu': lambda x: np.where(x > 0, 1, 0.01),
+        'sigmoid': lambda x: sigmoid(x) * (1 - sigmoid(x))
+}
+def mse(output, target):
+    return np.mean((output-target) ** 2)
+loss_derivatives = {
+        'mse': lambda output, target: 2 * (output - target) / output.size,
+        }
+class Convolutional_Layer():
+    #input is a 3 dimensional array of shape (depth, width, height)
+    #kernels is a 4d array of shape (kernel_depth(aka n_filters), input_depth, kernel_size, kernel_size)
+    def __init__(self, input_shape, kernel_depth, kernel_size, activation=None, loss_function=mse):
+        self.kernel_size = kernel_size
+        self.kernel_depth = kernel_depth
+        if activation:
+            self.activation = activation
+            self.activation_derivative = activation_derivatives[str(activation.__name__)]
+        else:
+            self.activation = None
+        self.loss_function = loss_function
+        self.loss_derivative = loss_derivatives[str(loss_function.__name__)]
+        self.input_depth, self.input_width, self.input_height = input_shape
+        self.kernels = np.random.randn(kernel_depth, self.input_depth, kernel_size, kernel_size) * 0.005
+        self.biases = np.zeros((kernel_depth, 1, 1))
+        self.output_size = (kernel_depth, self.input_width - kernel_size + 1, self.input_height - kernel_size + 1)
+    def forward(self, input_array):
+        output_array = []
+        self.input_array = input_array
+        for i in range(self.kernel_depth):
+            layer_output = np.zeros(self.output_size[1:]) + self.biases[i]
+            for j in range(self.input_depth):
+                layer_output += scipy.signal.correlate2d(self.input_array[j], self.kernels[i, j], mode='valid')
+            output_array.append(layer_output)
+        output_array = np.array(output_array)
+        self.output_array = output_array
+        self.pre_output = self.output_array
+        if self.activation:
+            self.output_array = self.activation(self.output_array)
+        return self.output_array
+
+    def backward(self, learning_rate, target_output):
+        self.error = self.loss_function(self.output_array, target_output)
+        self.output_gradient = self.loss_derivative(self.output_array, target_output)
+        if self.activation:
+            self.output_gradient = self.output_gradient * self.activation_derivative(self.pre_output)
+        kernel_gradient = np.zeros(self.kernels.shape)
+        input_gradient = np.zeros((self.input_depth, self.input_width, self.input_height))
+        bias_gradient = np.zeros_like(self.biases)
+        for i in range(len(self.kernels)):
+            bias_gradient[i] = np.sum(self.output_gradient[i])
+            for j in range(len(self.kernels[i])):
+                kernel_gradient[i, j] = scipy.signal.correlate2d(self.input_array[j], self.output_gradient[i], mode='valid')
+                input_gradient[j] += scipy.signal.convolve2d(self.output_gradient[i], self.kernels[i, j], mode='full')
+        self.kernels -= learning_rate * kernel_gradient
+        self.biases -= learning_rate * bias_gradient
+        return input_gradient
+        
+layer = Convolutional_Layer((3, 3, 3), 2, 3, activation=None)
+
+learning_rate = 0.05
+
+for i in range(100):
+    output = layer.forward(np.ones((3, 3, 3)))
+    loss = mse(output, np.ones((2, 1, 1)))
+    layer.backward(learning_rate, np.ones((2, 1, 1)))
+    learning_rate *= 0.95
+    if i % 10 == 0:
+        print(f"Epoch {i}, Loss: {loss:.6f}, Output: {output.flatten()}")
